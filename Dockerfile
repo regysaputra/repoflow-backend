@@ -13,21 +13,21 @@ COPY . .
 
 # Build the binary
 # CGO_ENABLED=0 ensures a static binary (no external C library dependencies)
-RUN CGO_ENABLED=0 GOOS=linux go build -o app main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server ./
 
 # Stage 2: Create the final minimal image
 FROM alpine:latest
 
-WORKDIR /root/
+WORKDIR /app
 
 # Install CA certificates (Required for HTTPS calls to Cloudflare R2)
 RUN apk --no-cache add ca-certificates
 
 # Copy the binary from the builder stage
-COPY --from=builder /app/app .
+COPY --from=builder /app/server /app/server
 
 # Expose the port defined in your Go code
 EXPOSE 8081
 
 # Command to run the executable
-CMD ["./app"]
+CMD ["./app/server"]
