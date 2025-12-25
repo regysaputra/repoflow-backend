@@ -73,15 +73,15 @@ jobs:
             set -e # Stop script immediately on error
 
             # 1. Setup Directory
-            if [ ! -d "repoflow/.git" ]; then
+            if [ ! -d "repoflow-backend/.git" ]; then
               echo "Repository not found or not a git repo — cloning fresh copy..."
               sudo rm -rf repoflow
               # If your repo is public:
-              git clone https://github.com/regysaputra/repoflow.git
+              git clone https://github.com/regysaputra/repoflow-backend.git
               # If private, use a token (ensure TOKEN_GITHUB is set as secret)
               # git clone https://$GITHUB_ACTOR:$TOKEN_GITHUB@github.com/regysaputra/repoflow.git
             fi
-            cd repoflow
+            cd repoflow-backend
             git fetch origin main
             git reset --hard origin/main
 
