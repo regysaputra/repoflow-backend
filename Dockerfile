@@ -1,33 +1,51 @@
-# Stage 1: Build the Go application
+# --- Build Stage ---
 FROM golang:1.25-alpine AS builder
 
-# Working directory
+# Install build dependencies. CGO is needed for pgx.
+RUN apk add --no-cache git build-base
+
 WORKDIR /app
 
-# Copy go mod and sum files to cache dependencies
+# 1. OPTIMIZATION: Copy dependencies first
 COPY go.mod go.sum ./
+
+# 2. OPTIMIZATION: Download modules.
+# This layer will be cached unless go.mod/go.sum changes.
 RUN go mod download
 
-# Copy the source code
+# Copy the rest of the source code.
 COPY . .
 
-# Build the binary
-# CGO_ENABLED=0 ensures a static binary (no external C library dependencies)
-RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server ./
+# Build the application.
+# -ldflags '-w -s': strips debug information to reduce binary size
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags '-w -s' -o /app/server ./cmd/server
 
-# Stage 2: Create the final minimal image
+# --- Final Stage ---
 FROM alpine:latest
+
+# 3. LOCALIZATION & UTILS: Add SSL, Timezone data, and curl (for healthcheck)
+RUN apk add --no-cache ca-certificates curl tzdata
+
+# Set Timezone to Jakarta (WIB)
+ENV TZ=Asia/Jakarta
+
+# 4. SECURITY: Create a non-root user
+# -D: Don't assign a password
+# -g: Add to group 'appuser'
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-# Install CA certificates (Required for HTTPS calls to Cloudflare R2)
-RUN apk --no-cache add ca-certificates
-
-# Copy the binary from the builder stage
+# Copy the built application binary from the builder stage.
 COPY --from=builder /app/server /app/server
 
-# Expose the port defined in your Go code
-EXPOSE 8081
+# Change ownership of the app directory to the non-root user
+RUN chown -R appuser:appgroup /app
 
-# Command to run the executable
-CMD ["./app/server"]
+# 5. SECURITY: Switch to non-root user
+USER appuser
+
+# Expose the port
+EXPOSE 8080
+
+CMD ["/app/server"]
