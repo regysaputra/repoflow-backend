@@ -69,7 +69,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }} # e.g., 'ubuntu'
           key: ${{ secrets.SSH_PRIVATE_KEY }} # Your server's private SSH key
           timeout: 120s
-          command_timeout: 20m
+          command_timeout: 30m
           script: |
             set -e # Stop script immediately on error
 
