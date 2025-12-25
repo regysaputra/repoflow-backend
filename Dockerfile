@@ -18,7 +18,7 @@ COPY . .
 
 # Build the application.
 # -ldflags '-w -s': strips debug information to reduce binary size
-RUN CGO_ENABLED=1 GOOS=linux go build -ldflags '-w -s' -o /app/server ./cmd/server
+RUN CGO_ENABLED=1 GOOS=linux go build -ldflags '-w -s' -o /app/server ./
 
 # --- Final Stage ---
 FROM alpine:latest
