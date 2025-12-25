@@ -9,6 +9,7 @@ type contextKey string
 
 const userIDKey contextKey = "userID"
 
+// AuthMiddleware is middleware
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// For production use "Authorization: Bearer <token>"
