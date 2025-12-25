@@ -1,0 +1,9 @@
+tmp/files/
+
+server
+*.exe
+*.dll
+*.test
+*.out
+*.log
+api/

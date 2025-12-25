@@ -1,0 +1,91 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # Allows manual trigger
+
+env:
+  REGISTRY: ghcr.io
+  # Uses the repository name as the image name (e.g., ghcr.io/username/repo-name)
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # Required to push to GHCR
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1
+        with:
+          timeout: 1000s
+          host: ${{ secrets.SERVER_HOST }}     # e.g., '123.45.67.89'
+          username: ${{ secrets.SERVER_USER }} # e.g., 'ubuntu'
+          key: ${{ secrets.SSH_PRIVATE_KEY }} # Your server's private SSH key
+          script: |
+            set -e # Stop script immediately on error
+
+            # 1. Setup Directory
+            if [ ! -d "repoflow/.git" ]; then
+              echo "Repository not found or not a git repo — cloning fresh copy..."
+              sudo rm -rf repoflow
+              # If your repo is public:
+              git clone https://github.com/regysaputra/repoflow.git
+              # If private, use a token (ensure TOKEN_GITHUB is set as secret)
+              # git clone https://$GITHUB_ACTOR:$TOKEN_GITHUB@github.com/regysaputra/repoflow.git
+            fi
+            cd repoflow
+            git fetch origin main
+            git reset --hard origin/main
+
+            # 2. Setup Environment Variables
+            echo "Creating .env file..."
+            cat <<EOF > .env
+            R2_ACCOUNT_ID=${{ secrets.R2_ACCOUNT_ID }}
+            R2_ACCESS_KEY=${{ secrets.R2_ACCESS_KEY }}
+            R2_SECRET_KEY=${{ secrets.R2_SECRET_KEY }}
+            R2_BUCKET=${{ secrets.R2_BUCKET }}
+            EOF
+
+            # 4. Pull Latest Images
+            echo ${{ secrets.TOKEN_GITHUB }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker compose pull app
+
+            # 6. Restart Services
+            echo "🚀 Restarting services..."
+            docker compose down --remove-orphans
+
+            # Start App
+            docker compose up -d app
+
+            echo "Deployment Success!"
