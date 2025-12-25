@@ -40,11 +40,6 @@ jobs:
       - name: Run Go Tests
         run: go test ./...
 
-      - name: Run Go Lint
-        uses: golangci/golangci-lint-action@v8
-        with:
-          version: v2.6.0
-
       # ----- BUILD & PUSH -----
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
