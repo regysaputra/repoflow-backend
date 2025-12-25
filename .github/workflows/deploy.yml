@@ -77,9 +77,9 @@ jobs:
               echo "Repository not found or not a git repo — cloning fresh copy..."
               sudo rm -rf repoflow-backend
               # If your repo is public:
-              # git clone https://github.com/regysaputra/repoflow-backend.git
+              git clone https://github.com/regysaputra/repoflow-backend.git
               # If private, use a token (ensure TOKEN_GITHUB is set as secret)
-              git clone https://$GITHUB_ACTOR:$TOKEN_GITHUB@github.com/regysaputra/repoflow-backend.git
+              # git clone https://$GITHUB_ACTOR:$TOKEN_GITHUB@github.com/regysaputra/repoflow-backend.git
             fi
             cd repoflow-backend
             git fetch origin main
