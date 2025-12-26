@@ -72,11 +72,18 @@ func main() {
 
 	router := chi.NewRouter()
 	router.Use(middleware.Recoverer)
-	router.Use(AuthMiddleware)
-	router.Post("/push", handler.pushHandler)
-	router.Get("/pull", handler.pullHandler)
-	router.Get("/list", handler.listHandler)
-	router.Post("/push-dir", handler.pushDirHandler)
+
+	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		SendJSON(w, http.StatusOK, Response{true, "OK"})
+	})
+
+	router.Group(func(r chi.Router) {
+		r.Use(AuthMiddleware)
+		r.Post("/push", handler.pushHandler)
+		r.Get("/pull", handler.pullHandler)
+		r.Get("/list", handler.listHandler)
+		r.Post("/push-dir", handler.pushDirHandler)
+	})
 
 	log.Fatal(http.ListenAndServe(port, router))
 }
