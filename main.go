@@ -83,6 +83,7 @@ func main() {
 		r.Get("/pull", handler.pullHandler)
 		r.Get("/list", handler.listHandler)
 		r.Post("/push-dir", handler.pushDirHandler)
+		r.Get("/pull-dir", handler.pullDirHandler)
 	})
 
 	log.Fatal(http.ListenAndServe(port, router))
@@ -294,6 +295,99 @@ func (h *FileHandler) pushDirHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Directory upload complete. Processed %d files.", fileCount)
 	SendJSON(w, http.StatusOK, Response{true, fmt.Sprintf("Extracted and uploaded %d files to %s", fileCount, h.Bucket)})
+}
+
+func (h *FileHandler) pullDirHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(userIDKey).(string)
+
+	dirName := r.URL.Query().Get("dir")
+	if dirName == "" {
+		SendJSON(w, http.StatusBadRequest, Response{false, "Directory parameter required"})
+		return
+	}
+
+	// Prepare prefix
+	// Clean path and ensure it ends with / to match folder structure
+	cleanDir := filepath.Clean(dirName)
+	if cleanDir == "." || cleanDir == "/" {
+		cleanDir = ""
+	} else {
+		cleanDir = strings.Trim(cleanDir, "/") + "/"
+	}
+
+	// Full prefix: user_123/my_backup/
+	prefix := userID + "/" + cleanDir
+
+	// 2. Set Response Headers for Download
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.tar.gz\"", strings.Trim(cleanDir, "/")))
+	w.Header().Set("Content-Type", "application/x-gzip")
+
+	// 3. Setup Compression Streams
+	gw := gzip.NewWriter(w)
+	defer gw.Close()
+	tw := tar.NewWriter(gw)
+	defer tw.Close()
+
+	// 4. List Objects (Handle Pagination for large folders)
+	paginator := s3.NewListObjectsV2Paginator(h.Client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(h.Bucket),
+		Prefix: aws.String(prefix),
+	})
+
+	fileCount := 0
+
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(r.Context())
+		if err != nil {
+			log.Printf("Failed to list objects: %v", err)
+			return // Cannot write JSON error because headers are already sent
+		}
+
+		for _, obj := range page.Contents {
+			// Skip if it's the folder itself (0 byte object ending in /)
+			if strings.HasSuffix(*obj.Key, "/") {
+				continue
+			}
+
+			// 5. Download File from R2
+			fileObj, err := h.Client.GetObject(r.Context(), &s3.GetObjectInput{
+				Bucket: aws.String(h.Bucket),
+				Key:    obj.Key,
+			})
+			if err != nil {
+				log.Printf("Failed to download %s: %v", *obj.Key, err)
+				continue
+			}
+
+			// 6. Create Tar Header
+			// We want the path inside the tar to be relative.
+			// If R2 key is "user_123/photos/summer/img.jpg" and we requested "photos",
+			// We want the tar entry to be "photos/summer/img.jpg" or "summer/img.jpg".
+			// Let's strip the userID prefix to keep it clean.
+			relPath := strings.TrimPrefix(*obj.Key, userID+"/")
+
+			header := &tar.Header{
+				Name: relPath,
+				Size: *obj.Size,
+				Mode: 0644,
+			}
+
+			if err := tw.WriteHeader(header); err != nil {
+				log.Printf("Failed to write header for %s: %v", relPath, err)
+				fileObj.Body.Close()
+				continue
+			}
+
+			// 7. Stream content R2 -> Tar
+			if _, err := io.Copy(tw, fileObj.Body); err != nil {
+				log.Printf("Failed to copy body for %s: %v", relPath, err)
+			}
+			fileObj.Body.Close()
+			fileCount++
+		}
+	}
+
+	log.Printf("Downloaded directory '%s' (%d files) for user %s", dirName, fileCount, userID)
 }
 
 func SendJSON(w http.ResponseWriter, status int, data any) {
