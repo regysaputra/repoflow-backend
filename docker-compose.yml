@@ -2,7 +2,8 @@ version: '3.8'
 
 services:
   app:
-    build: .
+    # Use the pre-built image from Github Container Registry
+    image: ghcr.io/regysaputra/repoflow-backend:latest
     container_name: app
     ports:
       - "8081:8081"

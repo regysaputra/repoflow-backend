@@ -30,15 +30,11 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: stable
-
-      - name: Download Go Modules
-        run: go mod download
-
-      - name: Vendor dependencies
-        run: go mod vendor
+          cache: 'true'
+          cache-dependency-path: go.sum
 
       - name: Run Go Tests
-        run: go test ./...
+        run: go test -v ./...
 
       # ----- BUILD & PUSH -----
       - name: Set up Docker Buildx
@@ -59,8 +55,11 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
 
       - name: Deploy to Server
         uses: appleboy/ssh-action@v1
@@ -111,5 +110,7 @@ jobs:
             echo "STEP 9"
             # Start App
             docker compose up -d app
-
+            
+            docker image prune -af --filter "until=24h"
+            
             echo "Deployment Success!"
